@@ -18,6 +18,7 @@ DEFAULTS: dict[str, Any] = {
     "headed":      False,
     "html_report": "",
     "json_report": "",
+    "trace":       False,
 }
 
 CONFIG_TEMPLATE = """\
@@ -36,6 +37,7 @@ headed: false           # show browser window during tests
 
 html_report: ""         # path to save HTML report (empty = skip)
 json_report: ""         # path to save JSON report (empty = skip)
+trace: false            # save Playwright trace for failed tests
 """
 
 

@@ -35,6 +35,7 @@ class TestResult:
     duration: float
     error_message: Optional[str] = None
     screenshot_path: Optional[str] = None
+    trace_path: Optional[str] = None
 
 
 @dataclass

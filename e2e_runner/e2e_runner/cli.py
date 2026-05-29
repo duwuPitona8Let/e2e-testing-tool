@@ -91,6 +91,7 @@ def main() -> None:
 @click.option("--json", "json_report", type=click.Path(path_type=Path), default=None, help="Save JSON report to file")
 @click.option("--retry", default=None, type=int, help="Retry failed tests N times")
 @click.option("--fail-fast/--no-fail-fast", default=None, help="Stop on first failure")
+@click.option("--trace/--no-trace", default=None, help="Save Playwright trace for failed tests")
 @click.option("--save/--no-save", default=True, show_default=True, help="Save run to history")
 def run(
     path: Path | None,
@@ -104,6 +105,7 @@ def run(
     json_report: Path | None,
     retry: int | None,
     fail_fast: bool | None,
+    trace: bool | None,
     save: bool,
 ) -> None:
     """Discover and run E2E tests in PATH."""
@@ -120,6 +122,7 @@ def run(
     effective_retry    = retry     if retry    is not None else cfg.get("retry",    0)
     effective_headed   = headed    if headed   is not None else cfg.get("headed",   False)
     effective_failfast = fail_fast if fail_fast is not None else cfg.get("fail_fast", False)
+    effective_trace    = trace     if trace    is not None else cfg.get("trace",    False)
     effective_html     = html_report or (Path(cfg["html_report"]) if cfg.get("html_report") else None)
     effective_json     = json_report or (Path(cfg["json_report"]) if cfg.get("json_report") else None)
     effective_path     = path or Path(cfg.get("tests", "."))
@@ -158,6 +161,7 @@ def run(
             workers=effective_workers,
             retries=effective_retry,
             fail_fast=effective_failfast,
+            trace=effective_trace,
             on_result=on_result,
         )
 

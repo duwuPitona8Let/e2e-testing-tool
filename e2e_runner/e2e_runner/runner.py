@@ -12,6 +12,7 @@ from .discovery import get_callable
 from .models import TestCase, TestResult, TestRun, TestStatus
 
 SCREENSHOT_DIR = Path.home() / ".e2e_runner" / "screenshots"
+TRACE_DIR = Path.home() / ".e2e_runner" / "traces"
 
 
 def run_suite(
@@ -23,15 +24,18 @@ def run_suite(
     workers: int = 1,
     retries: int = 0,
     fail_fast: bool = False,
+    trace: bool = False,
     on_result: Callable[[TestResult], None] | None = None,
 ) -> TestRun:
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    if trace:
+        TRACE_DIR.mkdir(parents=True, exist_ok=True)
     run = TestRun(project_name=project_name, started_at=datetime.now())
 
     if workers > 1:
-        results = _run_parallel(tests, base_url, headless, timeout, retries, workers, on_result)
+        results = _run_parallel(tests, base_url, headless, timeout, retries, workers, trace, on_result)
     else:
-        results = list(_run_sequential(tests, base_url, headless, timeout, retries, fail_fast, on_result))
+        results = list(_run_sequential(tests, base_url, headless, timeout, retries, fail_fast, trace, on_result))
 
     run.results = results
     run.finished_at = datetime.now()
@@ -45,13 +49,14 @@ def _run_sequential(
     timeout: int,
     retries: int,
     fail_fast: bool,
+    trace: bool,
     on_result: Callable | None,
 ) -> Iterator[TestResult]:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         try:
             for test in tests:
-                result = _execute_with_retry(test, browser, base_url, timeout, retries)
+                result = _execute_with_retry(test, browser, base_url, timeout, retries, trace)
                 if on_result:
                     on_result(result)
                 yield result
@@ -68,6 +73,7 @@ def _run_parallel(
     timeout: int,
     retries: int,
     workers: int,
+    trace: bool,
     on_result: Callable | None,
 ) -> list[TestResult]:
     results: list[TestResult] = [None] * len(tests)  # type: ignore
@@ -75,7 +81,7 @@ def _run_parallel(
     def _task(index: int, test: TestCase) -> tuple[int, TestResult]:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=headless)
-            result = _execute_with_retry(test, browser, base_url, timeout, retries)
+            result = _execute_with_retry(test, browser, base_url, timeout, retries, trace)
             browser.close()
         return index, result
 
@@ -96,11 +102,12 @@ def _execute_with_retry(
     base_url: str,
     timeout: int,
     retries: int,
+    trace: bool = False,
 ) -> TestResult:
-    result = _execute_test(test, browser, base_url, timeout)
+    result = _execute_test(test, browser, base_url, timeout, trace=trace)
     attempt = 1
     while result.status in (TestStatus.FAILED, TestStatus.ERROR) and attempt <= retries:
-        result = _execute_test(test, browser, base_url, timeout, attempt=attempt)
+        result = _execute_test(test, browser, base_url, timeout, attempt=attempt, trace=trace)
         attempt += 1
     return result
 
@@ -111,6 +118,7 @@ def _execute_test(
     base_url: str,
     timeout: int,
     attempt: int = 0,
+    trace: bool = False,
 ) -> TestResult:
     func = get_callable(test)
     if func is None:
@@ -123,8 +131,11 @@ def _execute_test(
 
     context: BrowserContext = browser.new_context(base_url=base_url or None)
     context.set_default_timeout(timeout)
+    if trace:
+        context.tracing.start(screenshots=True, snapshots=True)
     page: Page = context.new_page()
     screenshot_path: str | None = None
+    trace_path: str | None = None
     start = time.perf_counter()
 
     try:
@@ -142,6 +153,11 @@ def _execute_test(
     finally:
         duration = time.perf_counter() - start
         try:
+            if trace:
+                if status in (TestStatus.FAILED, TestStatus.ERROR):
+                    trace_path = _save_trace(context, test, attempt)
+                else:
+                    context.tracing.stop()
             context.close()
         except Exception:
             pass
@@ -152,6 +168,7 @@ def _execute_test(
         duration=duration,
         error_message=error_message,
         screenshot_path=screenshot_path,
+        trace_path=trace_path,
     )
 
 
@@ -163,6 +180,17 @@ def _call_test(func: Callable, page: Page, base_url: str) -> None:
     if "base_url" in sig.parameters:
         kwargs["base_url"] = base_url
     func(**kwargs)
+
+
+def _save_trace(context: BrowserContext, test: TestCase, attempt: int = 0) -> str | None:
+    try:
+        safe_name = test.name.replace("::", "__").replace("/", "_")
+        suffix = f"_retry{attempt}" if attempt > 0 else ""
+        path = TRACE_DIR / f"{safe_name}{suffix}_{int(time.time())}.zip"
+        context.tracing.stop(path=str(path))
+        return str(path)
+    except Exception:
+        return None
 
 
 def _take_screenshot(page: Page, test: TestCase, attempt: int = 0) -> str | None:

@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS test_results (
     duration        REAL    NOT NULL,
     error_message   TEXT,
     screenshot_path TEXT,
+    trace_path      TEXT,
     FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
 );
 
@@ -70,6 +71,10 @@ class Storage:
     def _init_db(self) -> None:
         with self._conn() as conn:
             conn.executescript(SCHEMA)
+            try:
+                conn.execute("ALTER TABLE test_results ADD COLUMN trace_path TEXT")
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Projects
@@ -153,8 +158,8 @@ class Storage:
             for result in run.results:
                 conn.execute(
                     """INSERT INTO test_results
-                       (run_id, test_name, file_path, function_name, status, duration, error_message, screenshot_path)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                       (run_id, test_name, file_path, function_name, status, duration, error_message, screenshot_path, trace_path)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         run_id,
                         result.test_case.name,
@@ -164,6 +169,7 @@ class Storage:
                         result.duration,
                         result.error_message,
                         result.screenshot_path,
+                        result.trace_path,
                     ),
                 )
             run.id = run_id
@@ -200,6 +206,7 @@ class Storage:
                     duration=r["duration"],
                     error_message=r["error_message"],
                     screenshot_path=r["screenshot_path"],
+                    trace_path=r["trace_path"],
                 )
             )
         return results

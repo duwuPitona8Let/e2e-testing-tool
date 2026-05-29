@@ -41,6 +41,9 @@ def print_result_line(result: TestResult) -> None:
     text.append(f"  {duration_str}", style="dim")
     if result.error_message:
         text.append(f"\n         {result.error_message[:120]}", style="red")
+    if result.trace_path:
+        text.append(f"\n         trace: ", style="dim")
+        text.append(f"playwright show-trace {result.trace_path}", style="cyan dim")
     console.print(text)
 
 
