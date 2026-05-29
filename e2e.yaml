@@ -1,0 +1,15 @@
+# e2e runner configuration
+# CLI flags always override values in this file.
+
+project: default        # project name saved in history
+base_url: "http://localhost:8080"            # URL of the app under test, e.g. http://localhost:8080
+tests: .                # path to tests directory or file
+
+workers: 1              # parallel workers (1 = sequential)
+timeout: 30000          # browser action timeout in ms
+retry: 0                # retry failed tests N times
+fail_fast: false        # stop on first failure
+headed: false           # show browser window during tests
+
+html_report: ""         # path to save HTML report (empty = skip)
+json_report: ""         # path to save JSON report (empty = skip)
